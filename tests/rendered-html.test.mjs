@@ -21,7 +21,17 @@ test("server-renders the FactoryOps shell", async () => {
   assert.match(html, /工厂运营看板/);
   assert.match(html, /生产计划/);
   assert.match(html, /PDM 数据同步/);
+  assert.match(html, /金汰家具/);
+  assert.match(html, /工厂运营管理系统/);
+  assert.match(html, /Developed by 俞俊安/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/);
+});
+
+test("uses a readable typography scale for operational tables", async () => {
+  const stylesheet = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  assert.match(stylesheet, /table \{[^}]*font-size: 13px/);
+  assert.match(stylesheet, /th \{[^}]*font-size: 12px/);
+  assert.match(stylesheet, /\.sidebar nav button[^}]*font-size: 14px/);
 });
 
 test("PDM integration is hard-coded as read-only", async () => {
