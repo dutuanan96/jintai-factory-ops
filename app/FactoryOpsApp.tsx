@@ -97,8 +97,8 @@ function Dashboard() {
   </>;
 }
 
-function PageHeading({ eyebrow = "FactoryOps", title, subtitle, action }: { eyebrow?: string; title: string; subtitle: string; action?: string }) {
-  return <div className="page-heading"><div><span className="eyebrow">{eyebrow}</span><h1>{title}</h1><p>{subtitle}</p></div>{action ? <button className="btn primary"><span className="material-symbols-outlined">add</span>{action}</button> : null}</div>;
+function PageHeading({ eyebrow = "FactoryOps", title, subtitle, action, onAction, actionIcon = "add" }: { eyebrow?: string; title: string; subtitle: string; action?: string; onAction?: () => void; actionIcon?: string }) {
+  return <div className="page-heading"><div><span className="eyebrow">{eyebrow}</span><h1>{title}</h1><p>{subtitle}</p></div>{action ? <button className="btn primary" type="button" onClick={onAction}><span className="material-symbols-outlined">{actionIcon}</span>{action}</button> : null}</div>;
 }
 
 function PanelHeader({ title, subtitle, action }: { title: string; subtitle: string; action?: string }) {
@@ -146,8 +146,35 @@ function ShippingView() {
   return <ModuleShell title="出货管理" subtitle="根据客户交付计划备货与出货，禁止超过订单数量或成品可用库存。" action="新建出货单"><table><thead><tr><th>出货单号</th><th>客户</th><th>SKU</th><th>计划数量</th><th>已出货</th><th>交期</th><th>状态</th></tr></thead><tbody>{shipments.map((row) => <tr key={row.code}><td className="mono strong">{row.code}</td><td>{row.customer}</td><td className="mono">{row.sku}</td><td>{row.planned.toLocaleString()}</td><td>{row.shipped.toLocaleString()}</td><td>{row.date}</td><td><StatusBadge status={row.status} /></td></tr>)}</tbody></table></ModuleShell>;
 }
 
+interface PdmSyncResult {
+  status: "APPLIED";
+  sourceCommitSha: string;
+  sourceUpdatedAt: string | null;
+  shardCount: number;
+  productCount: number;
+  materialCount: number;
+  bomLineCount: number;
+}
+
 function PdmSyncView() {
-  return <><PageHeading eyebrow="只读集成" title="PDM 数据同步" subtitle="FactoryOps 仅从 PDM 获取已发布产品、SKU、BOM 与 revision，不包含任何写回权限。" action="检查更新" /><section className="sync-guard"><div className="guard-icon"><span className="material-symbols-outlined">lock</span></div><div><strong>只读安全边界已启用</strong><p>连接器仅使用 GET 请求读取 PDM 的 commit-pinned 数据分片。生产、采购、库存与出货数据全部保存在 FactoryOps 独立数据库中。</p></div><span className="status-badge success">READ ONLY</span></section><section className="panel"><PanelHeader title="同步状态" subtitle="来源：dutuanan96/bom-viewer-sync · main · bom-viewer-sync/data" /><div className="sync-detail-grid"><div><span>最后同步</span><strong>2026-08-11 14:32</strong></div><div><span>来源 Commit</span><strong className="mono">44d23d05db80</strong></div><div><span>产品</span><strong>22</strong></div><div><span>数据分片</span><strong>24 / 24</strong></div><div><span>同步结果</span><strong className="positive">完整且有效</strong></div><div><span>待同步 Revision</span><strong className="warning-text">2</strong></div></div></section><section className="panel"><PanelHeader title="最近同步记录" subtitle="每次同步均保留来源 commit 与校验结果" /><div className="table-scroll"><table><thead><tr><th>时间</th><th>Commit</th><th>产品</th><th>BOM 行</th><th>操作者</th><th>结果</th></tr></thead><tbody><tr><td>08-11 14:32</td><td className="mono">44d23d05db80</td><td>22</td><td>1,846</td><td>系统计划任务</td><td><StatusBadge status="同步完成" /></td></tr><tr><td>08-10 16:18</td><td className="mono">9ba3e4c72a10</td><td>22</td><td>1,841</td><td>张计划</td><td><StatusBadge status="同步完成" /></td></tr></tbody></table></div></section></>;
+  const [result, setResult] = useState<PdmSyncResult | null>(null);
+  const [syncError, setSyncError] = useState("");
+  const [syncing, setSyncing] = useState(false);
+  const syncPdm = async () => {
+    setSyncing(true);
+    setSyncError("");
+    try {
+      const response = await fetch("/api/pdm/sync", { method: "POST" });
+      const payload = await response.json() as PdmSyncResult | { error?: string };
+      if (!response.ok || !("status" in payload) || payload.status !== "APPLIED") throw new Error("error" in payload ? payload.error : "PDM_SYNC_FAILED");
+      setResult(payload);
+    } catch (error) {
+      setSyncError(error instanceof Error ? error.message : "PDM_SYNC_FAILED");
+    } finally {
+      setSyncing(false);
+    }
+  };
+  return <><PageHeading eyebrow="只读集成" title="PDM 数据同步" subtitle="FactoryOps 仅从 PDM 获取已发布产品、SKU、BOM 与 revision，不包含任何写回权限。" action={syncing ? "同步中..." : "立即同步"} actionIcon="sync" onAction={() => { if (!syncing) void syncPdm(); }} /><section className="sync-guard"><div className="guard-icon"><span className="material-symbols-outlined">lock</span></div><div><strong>只读安全边界已启用</strong><p>连接器仅使用 GET 请求读取 PDM 的 commit-pinned 数据分片。生产、采购、库存与出货数据全部保存在 FactoryOps 独立数据库中。</p></div><span className="status-badge success">READ ONLY</span></section><section className="panel"><PanelHeader title="同步状态" subtitle="来源：dutuanan96/bom-viewer-sync · main · bom-viewer-sync/data" /><div className="sync-detail-grid"><div><span>最后同步</span><strong>{result?.sourceUpdatedAt ?? "尚未同步"}</strong></div><div><span>来源 Commit</span><strong className="mono">{result?.sourceCommitSha.slice(0, 12) ?? "-"}</strong></div><div><span>产品</span><strong>{result?.productCount ?? "-"}</strong></div><div><span>数据分片</span><strong>{result ? `${result.shardCount} / ${result.shardCount}` : "-"}</strong></div><div><span>同步结果</span><strong className={result ? "positive" : "warning-text"}>{result ? "完整且有效" : "等待同步"}</strong></div><div><span>BOM 行</span><strong>{result?.bomLineCount?.toLocaleString() ?? "-"}</strong></div></div>{syncError ? <p className="negative">同步失败：{syncError}</p> : null}</section></>;
 }
 
 export function FactoryOpsApp() {

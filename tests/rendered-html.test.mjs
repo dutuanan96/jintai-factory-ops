@@ -39,6 +39,7 @@ test("PDM integration is hard-coded as read-only", async () => {
   const route = await readFile(new URL("../app/api/pdm/sync/route.ts", import.meta.url), "utf8");
   assert.match(source, /accessMode:\s*"READ_ONLY"/);
   assert.match(source, /method:\s*"GET"/);
+  assert.match(source, /effectiveRevision/);
   assert.doesNotMatch(source, /method:\s*"(?:POST|PUT|PATCH|DELETE)"/);
   assert.match(route, /writeBackPerformed:\s*false/g);
   assert.doesNotMatch(route, /api\.github\.com\/repos\/.*\/git\/refs/);

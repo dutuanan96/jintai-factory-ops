@@ -38,6 +38,9 @@ interface PdmManifest {
   version?: number;
   updatedAt?: string;
   products?: string[];
+  productRevisions?: Record<string, {
+    effectiveRevision?: string;
+  }>;
 }
 
 interface PdmMaterialsShard {
@@ -201,7 +204,10 @@ export async function loadPdmReadOnlySnapshot(fetcher: Fetcher = fetch): Promise
     if (assertNonEmpty(product.code, "product_code") !== expectedCode) {
       throw new Error("PDM_PRODUCT_SHARD_MISMATCH");
     }
-    const revision = assertNonEmpty(product.revision, "product_revision");
+    const revision = assertNonEmpty(
+      manifest.productRevisions?.[expectedCode]?.effectiveRevision ?? product.revision,
+      "product_revision",
+    );
     const variants = Object.values(product.color_info ?? {});
     if (variants.length === 0) {
       throw new Error("PDM_PRODUCT_WITHOUT_VARIANTS");
